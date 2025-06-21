@@ -10,7 +10,7 @@ from PyQt5.QtWidgets import (
     QTextEdit, QLineEdit, QPushButton, QComboBox, QSlider, QSpinBox,
     QLabel, QGroupBox, QCheckBox, QListWidget, QListWidgetItem,
     QMenuBar, QMenu, QAction, QStatusBar, QProgressBar, QMessageBox,
-    QTabWidget, QScrollArea, QFrame
+    QTabWidget, QScrollArea, QFrame, QButtonGroup
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal, QTimer, pyqtSlot
 from PyQt5.QtGui import QFont, QTextCursor, QIcon, QPixmap
@@ -122,6 +122,7 @@ class MainWindow(QMainWindow):
         self.current_session: Optional[ChatSession] = None
         self.available_models: List[Dict[str, Any]] = []
         self.chat_worker: Optional[ChatWorker] = None
+        self.total_tokens: int = 0
 
         # UI Components
         self.session_manager: Optional[SessionManager] = None
@@ -131,6 +132,14 @@ class MainWindow(QMainWindow):
         self.init_ui()
         self.load_models()
         self.create_new_session()
+
+        # Initialize persona status
+        if hasattr(self, 'persona_combo') and hasattr(self, 'persona_info'):
+            current_persona = self.persona_combo.currentText() or "User"
+            self.persona_info.setText(f"Persona: {current_persona}")
+
+        # Apply initial theme
+        self.apply_styling()
 
         # Status update timer
         self.status_timer = QTimer()
@@ -228,7 +237,24 @@ class MainWindow(QMainWindow):
         for persona_name in personas.keys():
             self.persona_combo.addItem(persona_name)
         self.persona_combo.currentTextChanged.connect(self.on_persona_changed)
+        persona_layout.addWidget(self.persona_combo)
         config_layout.addLayout(persona_layout)
+
+        # Theme selection
+        theme_layout = QHBoxLayout()
+        theme_layout.addWidget(QLabel("Theme:"))
+        self.theme_combo = QComboBox()
+        themes = self.config_manager.get_available_themes()
+        for theme_name, theme_data in themes.items():
+            self.theme_combo.addItem(theme_data['name'], theme_name)
+        # Set current theme
+        current_theme = self.config_manager.ui_config.theme
+        theme_index = self.theme_combo.findData(current_theme)
+        if theme_index >= 0:
+            self.theme_combo.setCurrentIndex(theme_index)
+        self.theme_combo.currentTextChanged.connect(self.on_theme_changed)
+        theme_layout.addWidget(self.theme_combo)
+        config_layout.addLayout(theme_layout)
 
         # Temperature control
         temp_layout = QVBoxLayout()
@@ -245,13 +271,17 @@ class MainWindow(QMainWindow):
         config_layout.addLayout(temp_layout)
 
         # Max tokens control
-        tokens_layout = QHBoxLayout()
+        tokens_layout = QVBoxLayout()
         tokens_layout.addWidget(QLabel("Max Tokens:"))
-        self.max_tokens_spin = QSpinBox()
-        self.max_tokens_spin.setRange(1, 4096)
-        self.max_tokens_spin.setValue(self.config_manager.generation_config.default_max_tokens)
-        self.max_tokens_spin.valueChanged.connect(self.on_max_tokens_changed)
-        tokens_layout.addWidget(self.max_tokens_spin)
+        tokens_control_layout = QHBoxLayout()
+        self.max_tokens_slider = QSlider(Qt.Horizontal)
+        self.max_tokens_slider.setRange(50, 4096)
+        self.max_tokens_slider.setValue(self.config_manager.generation_config.default_max_tokens)
+        self.max_tokens_slider.valueChanged.connect(self.on_max_tokens_changed)
+        tokens_control_layout.addWidget(self.max_tokens_slider)
+        self.max_tokens_label = QLabel(str(self.config_manager.generation_config.default_max_tokens))
+        tokens_control_layout.addWidget(self.max_tokens_label)
+        tokens_layout.addLayout(tokens_control_layout)
         config_layout.addLayout(tokens_layout)
 
         # Streaming toggle
@@ -267,25 +297,38 @@ class MainWindow(QMainWindow):
         chat_widget = QWidget()
         chat_layout = QVBoxLayout(chat_widget)
 
-        # Chat display area
+        # Create a splitter for vertical layout with better proportions
+        chat_splitter = QSplitter(Qt.Vertical)
+        chat_layout.addWidget(chat_splitter)
+
+        # Chat display area (top part - takes most space)
+        output_widget = QWidget()
+        output_layout = QVBoxLayout(output_widget)
+        output_layout.setContentsMargins(0, 0, 0, 0)
+
         self.chat_display = QTextEdit()
         self.chat_display.setReadOnly(True)
         self.chat_display.setFont(QFont(self.config_manager.ui_config.font_family,
                                       self.config_manager.ui_config.font_size))
-        chat_layout.addWidget(self.chat_display)
+        output_layout.addWidget(self.chat_display)
+        chat_splitter.addWidget(output_widget)
 
-        # Input area
-        input_group = QGroupBox("Message Input")
-        input_layout = QVBoxLayout(input_group)
+        # Input area - compact layout (bottom part - minimal space)
+        input_widget = QWidget()
+        input_layout = QVBoxLayout(input_widget)
+        input_layout.setContentsMargins(5, 5, 5, 5)
+        input_layout.setSpacing(5)
 
         # Message input
         self.message_input = QTextEdit()
-        self.message_input.setMaximumHeight(100)
+        self.message_input.setMaximumHeight(60)
+        self.message_input.setMinimumHeight(60)
         self.message_input.setPlaceholderText("Type your message here...")
         input_layout.addWidget(self.message_input)
 
         # Input controls
         input_controls = QHBoxLayout()
+        input_controls.setSpacing(5)
 
         # Send button
         self.send_btn = QPushButton("Send")
@@ -312,7 +355,12 @@ class MainWindow(QMainWindow):
         input_controls.addWidget(self.auto_scroll_check)
 
         input_layout.addLayout(input_controls)
-        chat_layout.addWidget(input_group)
+        chat_splitter.addWidget(input_widget)
+
+        # Set proportions - output area gets most space (85%), input area gets minimal (15%)
+        chat_splitter.setSizes([850, 150])
+        chat_splitter.setStretchFactor(0, 1)  # Allow output area to stretch
+        chat_splitter.setStretchFactor(1, 0)  # Don't allow input area to stretch
 
         parent.addWidget(chat_widget)
 
@@ -376,16 +424,25 @@ class MainWindow(QMainWindow):
     def create_status_bar(self):
         """Create the status bar."""
         self.status_bar = QStatusBar()
+        self.status_bar.setContentsMargins(10, 0, 10, 0)  # Add padding to align with panels
         self.setStatusBar(self.status_bar)
 
         # Connection status
         self.connection_status = QLabel("Checking connection...")
         self.status_bar.addWidget(self.connection_status)
 
+        # Persona info
+        self.persona_info = QLabel("Persona: User")
+        self.status_bar.addWidget(self.persona_info)
+
         # Progress bar for requests
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         self.status_bar.addPermanentWidget(self.progress_bar)
+
+        # Token count info
+        self.token_info = QLabel("Tokens: 0")
+        self.status_bar.addPermanentWidget(self.token_info)
 
         # Session info
         self.session_info = QLabel("No session")
@@ -393,28 +450,161 @@ class MainWindow(QMainWindow):
 
     def apply_styling(self):
         """Apply custom styling to the interface."""
+        theme = self.config_manager.get_theme()
+
         # Set font for chat display
         chat_font = QFont(self.config_manager.ui_config.font_family,
                          self.config_manager.ui_config.font_size)
         self.chat_display.setFont(chat_font)
 
+        # Apply theme to main window
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {theme['panel_bg']};
+                color: {theme['panel_text']};
+            }}
+            QGroupBox {{
+                background-color: {theme['panel_bg']};
+                color: {theme['panel_text']};
+                border: 1px solid {theme['border_color']};
+                border-radius: 8px;
+                margin: 5px;
+                padding-top: 10px;
+                font-weight: bold;
+            }}
+            QGroupBox::title {{
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }}
+            QLabel {{
+                color: {theme['panel_text']};
+            }}
+            QComboBox {{
+                background-color: {theme['dropdown_bg']};
+                color: {theme['dropdown_text']};
+                border: 1px solid {theme['dropdown_border']};
+                border-radius: 4px;
+                padding: 4px;
+                min-width: 120px;
+            }}
+            QComboBox::drop-down {{
+                border: none;
+                width: 20px;
+            }}
+            QComboBox::down-arrow {{
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 5px solid {theme['dropdown_text']};
+                margin-right: 5px;
+            }}
+            QComboBox QAbstractItemView {{
+                background-color: {theme['dropdown_bg']};
+                color: {theme['dropdown_text']};
+                border: 1px solid {theme['dropdown_border']};
+                selection-background-color: {theme['selection_bg']};
+                selection-color: {theme['selection_text']};
+            }}
+            QPushButton {{
+                background-color: {theme['button_bg']};
+                color: {theme['button_text']};
+                border: none;
+                border-radius: 4px;
+                padding: 6px 12px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background-color: {theme['button_hover']};
+            }}
+            QPushButton:pressed {{
+                background-color: {theme['button_hover']};
+            }}
+            QPushButton:disabled {{
+                background-color: {theme['border_color']};
+                color: {theme['status_text']};
+            }}
+            QSlider::groove:horizontal {{
+                border: 1px solid {theme['border_color']};
+                height: 8px;
+                background: {theme['input_bg']};
+                border-radius: 4px;
+            }}
+            QSlider::handle:horizontal {{
+                background: {theme['button_bg']};
+                border: 1px solid {theme['border_color']};
+                width: 18px;
+                margin: -2px 0;
+                border-radius: 9px;
+            }}
+            QCheckBox {{
+                color: {theme['panel_text']};
+            }}
+            QCheckBox::indicator {{
+                width: 16px;
+                height: 16px;
+                border: 2px solid {theme['border_color']};
+                border-radius: 3px;
+                background-color: {theme['input_bg']};
+            }}
+            QCheckBox::indicator:checked {{
+                background-color: {theme['button_bg']};
+                border-color: {theme['button_bg']};
+            }}
+            QListWidget {{
+                background-color: {theme['input_bg']};
+                color: {theme['input_text']};
+                border: 1px solid {theme['border_color']};
+                border-radius: 4px;
+            }}
+            QListWidget::item:selected {{
+                background-color: {theme['button_bg']};
+                color: {theme['button_text']};
+            }}
+            QStatusBar {{
+                background-color: {theme['status_bg']};
+                color: {theme['status_text']};
+                border-top: 1px solid {theme['border_color']};
+            }}
+            QProgressBar {{
+                border: 1px solid {theme['border_color']};
+                border-radius: 4px;
+                text-align: center;
+                background-color: {theme['input_bg']};
+            }}
+            QProgressBar::chunk {{
+                background-color: {theme['button_bg']};
+                border-radius: 3px;
+            }}
+        """)
+
         # Style the chat display
-        self.chat_display.setStyleSheet("""
-            QTextEdit {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
+        self.chat_display.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {theme['chat_bg']};
+                color: {theme['chat_text']};
+                border: 1px solid {theme['border_color']};
                 border-radius: 4px;
                 padding: 8px;
-            }
+                selection-background-color: {theme['selection_bg']};
+                selection-color: {theme['selection_text']};
+            }}
         """)
 
         # Style input area
-        self.message_input.setStyleSheet("""
-            QTextEdit {
-                border: 2px solid #007bff;
+        self.message_input.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: {theme['input_bg']};
+                color: {theme['input_text']};
+                border: 2px solid {theme['input_border']};
                 border-radius: 4px;
                 padding: 4px;
-            }
+                selection-background-color: {theme['selection_bg']};
+                selection-color: {theme['selection_text']};
+            }}
+            QTextEdit:focus {{
+                border-color: {theme['button_bg']};
+            }}
         """)
 
     def load_models(self):
@@ -463,11 +653,12 @@ class MainWindow(QMainWindow):
             system_prompt=persona_config['system_prompt'],
             model_name=self.model_combo.currentText(),
             default_temperature=self.temperature_slider.value() / 100.0,
-            default_max_tokens=self.max_tokens_spin.value()
+            default_max_tokens=self.max_tokens_slider.value()
         )
 
         self.chat_display.clear()
         self.update_session_info()
+        self.update_token_count()
         self.load_sessions_list()
 
     def save_current_session(self):
@@ -567,9 +758,10 @@ class MainWindow(QMainWindow):
 
         self.persona_combo.setCurrentText(self.current_session.persona)
         self.temperature_slider.setValue(int(self.current_session.default_temperature * 100))
-        self.max_tokens_spin.setValue(self.current_session.default_max_tokens)
+        self.max_tokens_slider.setValue(self.current_session.default_max_tokens)
 
         self.update_session_info()
+        self.update_token_count()
 
     def send_message(self):
         """Send user message and get AI response."""
@@ -583,10 +775,12 @@ class MainWindow(QMainWindow):
         # Add user message
         user_message = Message(
             content=message_text,
-            role=MessageRole.USER
+            role=MessageRole.USER,
+            token_count=self.estimate_token_count(message_text)
         )
         self.current_session.add_message(user_message)
         self.append_message_to_display(user_message)
+        self.update_token_count()
 
         # Clear input
         self.message_input.clear()
@@ -598,7 +792,7 @@ class MainWindow(QMainWindow):
             return
 
         temperature = self.temperature_slider.value() / 100.0
-        max_tokens = self.max_tokens_spin.value()
+        max_tokens = self.max_tokens_slider.value()
         stream = self.streaming_check.isChecked()
 
         # Get conversation history
@@ -639,13 +833,17 @@ class MainWindow(QMainWindow):
             role=MessageRole.ASSISTANT,
             model_used=self.model_combo.currentText(),
             temperature=self.temperature_slider.value() / 100.0,
-            max_tokens=self.max_tokens_spin.value()
+            max_tokens=self.max_tokens_slider.value(),
+            token_count=self.estimate_token_count(response_text)
         )
 
         self.current_session.add_message(assistant_message)
 
         if not self.streaming_check.isChecked():
             self.append_message_to_display(assistant_message)
+
+        # Update token count
+        self.update_token_count()
 
         # Auto-save session
         self.save_current_session()
@@ -679,32 +877,34 @@ class MainWindow(QMainWindow):
         cursor = self.chat_display.textCursor()
         cursor.movePosition(QTextCursor.End)
 
+        # Get current theme colors
+        theme = self.config_manager.get_theme()
+
         # Format message content
         content_html = message.content.replace('\n', '<br>')
 
-        # Format message
+        # Format message with theme colors
         if message.is_user_message():
-            html_template = """
-                <div style="margin: 10px 0; padding: 10px; background-color: #e3f2fd; border-left: 4px solid #2196f3;">
-                    <b>You</b> <small>({time})</small><br>
-                    {content}
+            # User message styling - slightly different background
+            user_bg = theme['input_bg'] if theme['input_bg'] != theme['chat_bg'] else theme['button_bg'] + '20'  # Add transparency
+            html_template = f"""
+                <div style="margin: 10px 0; padding: 10px; background-color: {user_bg}; border-left: 4px solid {theme['button_bg']}; color: {theme['chat_text']}; border-radius: 4px;">
+                    <b style="color: {theme['button_bg']};">You</b> <small style="color: {theme['status_text']};">({message.get_display_time()})</small><br>
+                    <span style="color: {theme['chat_text']};">{content_html}</span>
                 </div>
             """
-            cursor.insertHtml(html_template.format(
-                time=message.get_display_time(),
-                content=content_html
-            ))
+            cursor.insertHtml(html_template)
         elif message.is_assistant_message():
-            html_template = """
-                <div style="margin: 10px 0; padding: 10px; background-color: #f3e5f5; border-left: 4px solid #9c27b0;">
-                    <b>Assistant</b> <small>({time})</small><br>
-                    {content}
+            # Assistant message styling - different accent color
+            assistant_color = '#28a745' if theme == self.config_manager.get_theme('light') else '#00d4aa'
+            assistant_bg = theme['panel_bg'] if theme['panel_bg'] != theme['chat_bg'] else assistant_color + '20'  # Add transparency
+            html_template = f"""
+                <div style="margin: 10px 0; padding: 10px; background-color: {assistant_bg}; border-left: 4px solid {assistant_color}; color: {theme['chat_text']}; border-radius: 4px;">
+                    <b style="color: {assistant_color};">Assistant</b> <small style="color: {theme['status_text']};">({message.get_display_time()})</small><br>
+                    <span style="color: {theme['chat_text']};">{content_html}</span>
                 </div>
             """
-            cursor.insertHtml(html_template.format(
-                time=message.get_display_time(),
-                content=content_html
-            ))
+            cursor.insertHtml(html_template)
 
         # Auto-scroll if enabled
         if self.auto_scroll_check.isChecked():
@@ -721,6 +921,7 @@ class MainWindow(QMainWindow):
             if self.current_session:
                 self.current_session.clear_conversation(keep_system=True)
                 self.update_session_info()
+                self.update_token_count()
 
     def update_session_info(self):
         """Update session information display."""
@@ -738,6 +939,9 @@ class MainWindow(QMainWindow):
 
     def on_persona_changed(self, persona_name):
         """Handle persona selection change."""
+        # Update status bar
+        self.persona_info.setText(f"Persona: {persona_name}")
+
         if self.current_session:
             persona_config = self.config_manager.get_persona(persona_name)
             self.current_session.persona = persona_name
@@ -752,6 +956,7 @@ class MainWindow(QMainWindow):
 
     def on_max_tokens_changed(self, value):
         """Handle max tokens change."""
+        self.max_tokens_label.setText(str(value))
         if self.current_session:
             self.current_session.default_max_tokens = value
 
@@ -833,3 +1038,36 @@ class MainWindow(QMainWindow):
                 return
 
         super().keyPressEvent(event)
+
+    def on_theme_changed(self, theme_name):
+        """Handle theme selection change."""
+        # Get the theme key from the combo box data
+        theme_key = None
+        for i in range(self.theme_combo.count()):
+            if self.theme_combo.itemText(i) == theme_name:
+                theme_key = self.theme_combo.itemData(i)
+                break
+
+        if theme_key:
+            self.config_manager.set_theme(theme_key)
+            self.apply_styling()
+
+    def estimate_token_count(self, text: str) -> int:
+        """
+        Estimate token count for text.
+        This is a rough approximation: ~4 characters per token for English text.
+        """
+        if not text:
+            return 0
+        # Simple estimation: divide character count by 4
+        return max(1, len(text.strip()) // 4)
+
+    def update_token_count(self):
+        """Update the token count in status bar."""
+        if self.current_session:
+            total_tokens = sum(
+                msg.token_count or 0 for msg in self.current_session.messages
+            )
+            self.token_info.setText(f"Tokens: {total_tokens}")
+        else:
+            self.token_info.setText("Tokens: 0")

@@ -59,7 +59,7 @@ class ApiConfig:
 @dataclass
 class UIConfig:
     """Configuration for UI settings."""
-    theme: str = "default"
+    theme: str = "light"
     font_family: str = "Arial"
     font_size: int = 10
     window_width: int = 1200
@@ -87,7 +87,7 @@ class UIConfig:
     def from_dict(cls, data: Dict[str, Any]) -> 'UIConfig':
         """Create from dictionary."""
         return cls(
-            theme=data.get('theme', 'default'),
+            theme=data.get('theme', 'light'),
             font_family=data.get('font_family', 'Arial'),
             font_size=data.get('font_size', 10),
             window_width=data.get('window_width', 1200),
@@ -330,6 +330,82 @@ class ConfigManager:
             self.generation_config = GenerationConfig.from_dict(data['generation'])
 
         self.save_config()
+
+    def get_theme(self, theme_name: str = None) -> Dict[str, str]:
+        """
+        Get theme configuration.
+
+        Args:
+            theme_name (str, optional): Theme name. If None, uses current theme.
+
+        Returns:
+            Dict[str, str]: Theme configuration
+        """
+        if theme_name is None:
+            theme_name = self.ui_config.theme
+        return THEMES.get(theme_name, THEMES["light"])
+
+    def get_available_themes(self) -> Dict[str, Dict[str, str]]:
+        """Get all available themes."""
+        return THEMES.copy()
+
+    def set_theme(self, theme_name: str) -> None:
+        """
+        Set the current theme.
+
+        Args:
+            theme_name (str): Theme name
+        """
+        if theme_name in THEMES:
+            self.ui_config.theme = theme_name
+            self.save_config()
+
+
+# Theme definitions
+THEMES = {
+    "light": {
+        "name": "Light Theme",
+        "chat_bg": "#ffffff",
+        "chat_text": "#212529",
+        "input_bg": "#ffffff",
+        "input_text": "#212529",
+        "input_border": "#007bff",
+        "panel_bg": "#f8f9fa",
+        "panel_text": "#212529",
+        "border_color": "#dee2e6",
+        "button_bg": "#007bff",
+        "button_text": "#ffffff",
+        "button_hover": "#0056b3",
+        "status_bg": "#f8f9fa",
+        "status_text": "#495057",
+        "dropdown_bg": "#ffffff",
+        "dropdown_text": "#212529",
+        "dropdown_border": "#ced4da",
+        "selection_bg": "#007bff",
+        "selection_text": "#ffffff"
+    },
+    "dark": {
+        "name": "Dark Theme",
+        "chat_bg": "#1e1e1e",
+        "chat_text": "#d4d4d4",
+        "input_bg": "#2d2d30",
+        "input_text": "#d4d4d4",
+        "input_border": "#0078d4",
+        "panel_bg": "#252526",
+        "panel_text": "#cccccc",
+        "border_color": "#3e3e42",
+        "button_bg": "#0078d4",
+        "button_text": "#ffffff",
+        "button_hover": "#106ebe",
+        "status_bg": "#252526",
+        "status_text": "#cccccc",
+        "dropdown_bg": "#2d2d30",
+        "dropdown_text": "#d4d4d4",
+        "dropdown_border": "#3e3e42",
+        "selection_bg": "#0078d4",
+        "selection_text": "#ffffff"
+    }
+}
 
 
 # Global configuration instance
