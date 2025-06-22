@@ -186,29 +186,40 @@ class MainWindow(QMainWindow):
         session_layout = QVBoxLayout(session_widget)
 
         # Session controls
-        session_controls = QGroupBox("Sessions")
-        controls_layout = QVBoxLayout(session_controls)
+        session_controls_widget = QWidget()
+        controls_layout = QVBoxLayout(session_controls_widget)
 
         # New session button
         self.new_session_btn = QPushButton("New Session")
+        self.new_session_btn.setObjectName("new_session_btn")
         self.new_session_btn.clicked.connect(self.create_new_session)
         controls_layout.addWidget(self.new_session_btn)
 
         # Load session button
         self.load_session_btn = QPushButton("Load Session")
+        self.load_session_btn.setObjectName("load_session_btn")
         self.load_session_btn.clicked.connect(self.load_session)
         controls_layout.addWidget(self.load_session_btn)
 
         # Delete session button
         self.delete_session_btn = QPushButton("Delete Session")
+        self.delete_session_btn.setObjectName("delete_session_btn")
         self.delete_session_btn.clicked.connect(self.delete_session)
         controls_layout.addWidget(self.delete_session_btn)
 
-        session_layout.addWidget(session_controls)
+        session_layout.addWidget(session_controls_widget)
+
+        # Sessions label
+        sessions_label = QLabel("Sessions")
+        sessions_label.setStyleSheet("font-weight: bold; font-size: 14px; margin: 10px 0 5px 0;")
+        session_layout.addWidget(sessions_label)
 
         # Sessions list
         self.sessions_list = QListWidget()
         self.sessions_list.itemDoubleClicked.connect(self.on_session_double_click)
+        self.sessions_list.setVerticalScrollMode(QListWidget.ScrollPerPixel)
+        self.sessions_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.sessions_list.setSpacing(2)
         session_layout.addWidget(self.sessions_list)
 
         # Configuration panel
@@ -319,21 +330,24 @@ class MainWindow(QMainWindow):
         input_layout.setContentsMargins(5, 5, 5, 5)
         input_layout.setSpacing(5)
 
-        # Message input
+        # Message input - iPhone Messages style
         self.message_input = QTextEdit()
-        self.message_input.setMaximumHeight(60)
-        self.message_input.setMinimumHeight(60)
-        self.message_input.setPlaceholderText("Type your message here...")
+        self.message_input.setMaximumHeight(44)
+        self.message_input.setMinimumHeight(44)
+        self.message_input.setPlaceholderText("Message")
+        self.message_input.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.message_input.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         input_layout.addWidget(self.message_input)
 
         # Input controls
         input_controls = QHBoxLayout()
         input_controls.setSpacing(5)
 
-        # Send button
-        self.send_btn = QPushButton("Send")
+        # Send button - iPhone Messages style
+        self.send_btn = QPushButton("↑")
         self.send_btn.clicked.connect(self.send_message)
         self.send_btn.setDefault(True)
+        self.send_btn.setFixedSize(32, 32)
         input_controls.addWidget(self.send_btn)
 
         # Cancel button
@@ -355,10 +369,17 @@ class MainWindow(QMainWindow):
         input_controls.addWidget(self.auto_scroll_check)
 
         input_layout.addLayout(input_controls)
-        chat_splitter.addWidget(input_widget)
 
-        # Set proportions - output area gets most space (85%), input area gets minimal (15%)
-        chat_splitter.setSizes([850, 150])
+        # Add some padding around the input area for iPhone Messages look
+        input_container = QWidget()
+        input_container_layout = QVBoxLayout(input_container)
+        input_container_layout.setContentsMargins(16, 8, 16, 16)
+        input_container_layout.addWidget(input_widget)
+
+        chat_splitter.addWidget(input_container)
+
+        # Set proportions - output area gets most space (90%), input area gets minimal (10%)
+        chat_splitter.setSizes([900, 100])
         chat_splitter.setStretchFactor(0, 1)  # Allow output area to stretch
         chat_splitter.setStretchFactor(1, 0)  # Don't allow input area to stretch
 
@@ -524,6 +545,30 @@ class MainWindow(QMainWindow):
                 background-color: {theme['border_color']};
                 color: {theme['status_text']};
             }}
+            QPushButton#new_session_btn {{
+                background-color: {'#28a745' if self.config_manager.ui_config.theme == 'light' else '#198754'};
+                color: white;
+                font-weight: bold;
+            }}
+            QPushButton#new_session_btn:hover {{
+                background-color: {'#218838' if self.config_manager.ui_config.theme == 'light' else '#157347'};
+            }}
+            QPushButton#delete_session_btn {{
+                background-color: {'#dc3545' if self.config_manager.ui_config.theme == 'light' else '#d63384'};
+                color: white;
+                font-weight: bold;
+            }}
+            QPushButton#delete_session_btn:hover {{
+                background-color: {'#c82333' if self.config_manager.ui_config.theme == 'light' else '#b02a5b'};
+            }}
+            QPushButton#load_session_btn {{
+                background-color: {theme['button_bg']};
+                color: {theme['button_text']};
+                font-weight: bold;
+            }}
+            QPushButton#load_session_btn:hover {{
+                background-color: {theme['button_hover']};
+            }}
             QSlider::groove:horizontal {{
                 border: 1px solid {theme['border_color']};
                 height: 8px;
@@ -552,19 +597,35 @@ class MainWindow(QMainWindow):
                 border-color: {theme['button_bg']};
             }}
             QListWidget {{
-                background-color: {theme['input_bg']};
-                color: {theme['input_text']};
+                background-color: {theme['panel_bg']};
+                color: {theme['panel_text']};
                 border: 1px solid {theme['border_color']};
-                border-radius: 4px;
+                border-radius: 8px;
+                padding: 6px;
+                outline: none;
+            }}
+            QListWidget::item {{
+                padding: 2px;
+                border: none;
+                border-radius: 8px;
+                margin: 3px;
+                background-color: {theme['input_bg']};
+                min-height: 85px;
             }}
             QListWidget::item:selected {{
-                background-color: {theme['button_bg']};
-                color: {theme['button_text']};
+                background-color: {theme['selection_bg']};
+                color: {theme['selection_text']};
+            }}
+            QListWidget::item:hover {{
+                background-color: {theme['button_bg']}33;
             }}
             QStatusBar {{
                 background-color: {theme['status_bg']};
                 color: {theme['status_text']};
                 border-top: 1px solid {theme['border_color']};
+            }}
+            QStatusBar QLabel {{
+                color: {theme['status_text']};
             }}
             QProgressBar {{
                 border: 1px solid {theme['border_color']};
@@ -578,32 +639,81 @@ class MainWindow(QMainWindow):
             }}
         """)
 
-        # Style the chat display
+        # Style the chat display for authentic iPhone SMS bubbles
+        chat_bg = '#FFFFFF' if self.config_manager.ui_config.theme == 'light' else '#000000'
+        # Add subtle iPhone Messages background pattern/gradient
+        if self.config_manager.ui_config.theme == 'light':
+            bg_style = f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FFFFFF, stop:1 #F8F8F8);"
+        else:
+            bg_style = f"background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #000000, stop:1 #0A0A0A);"
+
         self.chat_display.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {theme['chat_bg']};
+                {bg_style}
                 color: {theme['chat_text']};
-                border: 1px solid {theme['border_color']};
-                border-radius: 4px;
-                padding: 8px;
+                border: none;
+                border-radius: 0px;
+                padding: 20px 16px;
                 selection-background-color: {theme['selection_bg']};
                 selection-color: {theme['selection_text']};
+                font-family: Arial, sans-serif;
+                font-size: 17px;
+                line-height: 1.35;
             }}
         """)
 
-        # Style input area
+        # Style input area to match iPhone Messages
+        input_bg = '#FFFFFF' if self.config_manager.ui_config.theme == 'light' else '#2C2C2E'
+        input_border = '#D1D1D6' if self.config_manager.ui_config.theme == 'light' else '#48484A'
+        input_shadow = 'box-shadow: 0 1px 3px rgba(0,0,0,0.1);' if self.config_manager.ui_config.theme == 'light' else 'box-shadow: 0 1px 3px rgba(255,255,255,0.05);'
+
         self.message_input.setStyleSheet(f"""
             QTextEdit {{
-                background-color: {theme['input_bg']};
+                background-color: {input_bg};
                 color: {theme['input_text']};
-                border: 2px solid {theme['input_border']};
-                border-radius: 4px;
-                padding: 4px;
+                border: 1px solid {input_border};
+                border-radius: 22px;
+                padding: 10px 16px;
+                font-size: 17px;
+                line-height: 1.35;
+                {input_shadow}
                 selection-background-color: {theme['selection_bg']};
                 selection-color: {theme['selection_text']};
+                font-family: Arial, sans-serif;
             }}
             QTextEdit:focus {{
                 border-color: {theme['button_bg']};
+                outline: none;
+                {input_shadow}
+            }}
+        """)
+
+        # Style send button to match iPhone Messages
+        send_bg = '#007AFF' if self.config_manager.ui_config.theme == 'light' else '#0A84FF'
+        send_hover = '#0051D5' if self.config_manager.ui_config.theme == 'light' else '#0969DA'
+
+        self.send_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {send_bg};
+                color: white;
+                border: none;
+                border-radius: 16px;
+                font-size: 16px;
+                font-weight: 600;
+                box-shadow: 0 2px 4px rgba(0,122,255,0.3);
+            }}
+            QPushButton:hover {{
+                background-color: {send_hover};
+                transform: scale(1.05);
+            }}
+            QPushButton:pressed {{
+                background-color: {send_hover};
+                transform: scale(0.95);
+            }}
+            QPushButton:disabled {{
+                background-color: #C7C7CC;
+                color: #8E8E93;
+                box-shadow: none;
             }}
         """)
 
@@ -624,19 +734,26 @@ class MainWindow(QMainWindow):
                 self.connection_status.setStyleSheet("color: orange;")
 
         except Exception as e:
+            is_dark_theme = self.config_manager.ui_config.theme == 'dark'
+            red_color = "#ff6b6b" if is_dark_theme else "#dc3545"
+
             self.connection_status.setText(f"Connection failed: {str(e)}")
-            self.connection_status.setStyleSheet("color: red;")
+            self.connection_status.setStyleSheet(f"color: {red_color};")
             QMessageBox.warning(self, "Connection Error",
                               f"Failed to connect to LM Studio:\n{str(e)}")
 
     def update_connection_status(self):
         """Update connection status periodically."""
+        is_dark_theme = self.config_manager.ui_config.theme == 'dark'
+
         if self.lm_client.test_connection():
             self.connection_status.setText("Connected to LM Studio")
-            self.connection_status.setStyleSheet("color: green;")
+            green_color = "#51cf66" if is_dark_theme else "#28a745"
+            self.connection_status.setStyleSheet(f"color: {green_color};")
         else:
             self.connection_status.setText("Connection lost")
-            self.connection_status.setStyleSheet("color: red;")
+            red_color = "#ff6b6b" if is_dark_theme else "#dc3545"
+            self.connection_status.setStyleSheet(f"color: {red_color};")
 
     def create_new_session(self):
         """Create a new chat session."""
@@ -712,17 +829,109 @@ class MainWindow(QMainWindow):
             for session_file in sessions_dir.glob("*.json"):
                 try:
                     session = ChatSession.load_from_file(str(session_file))
-                    item = QListWidgetItem(session.title)
-                    item.setData(Qt.UserRole, session.session_id)
-                    item.setToolTip(f"Created: {session.created_at.strftime('%Y-%m-%d %H:%M')}\n"
-                                  f"Messages: {len(session.messages)}\n"
-                                  f"Model: {session.model_name or 'Unknown'}")
-                    self.sessions_list.addItem(item)
+                    self.add_session_to_list(session)
                 except Exception as e:
                     print(f"Error loading session {session_file}: {e}")
 
         except Exception as e:
             print(f"Error loading sessions directory: {e}")
+
+    def add_session_to_list(self, session):
+        """Add a session to the sessions list with enhanced display."""
+        from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel
+        from PyQt5.QtCore import Qt
+        from datetime import datetime, timedelta
+
+        # Calculate days since last update
+        now = datetime.now()
+        days_old = (now - session.updated_at).days
+
+        # Determine color based on age - adjust for theme
+        is_dark_theme = self.config_manager.ui_config.theme == 'dark'
+        if days_old >= 15:
+            age_color = "#ff6b6b" if is_dark_theme else "#dc3545"  # Red
+        elif days_old >= 7:
+            age_color = "#ffd93d" if is_dark_theme else "#ffc107"  # Yellow
+        else:
+            age_color = "#51cf66" if is_dark_theme else "#28a745"  # Green
+
+        # Get theme colors
+        theme = self.config_manager.get_theme()
+
+        # Create custom widget for the list item
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(4)
+
+        # Session title (truncate if too long)
+        title_text = session.title
+        if len(title_text) > 35:
+            title_text = title_text[:32] + "..."
+
+        title_label = QLabel(title_text)
+        title_color = '#555555' if self.config_manager.ui_config.theme == 'light' else '#dddddd'
+        title_label.setStyleSheet(f"""
+            QLabel {{
+                color: {title_color};
+                font-weight: bold;
+                font-size: 14px;
+                margin: 2px 0;
+                padding: 0;
+            }}
+        """)
+        title_label.setWordWrap(True)
+        layout.addWidget(title_label)
+
+        # Token count
+        total_tokens = session.get_total_tokens()
+        token_label = QLabel(f"Tokens: {total_tokens}")
+        token_label.setStyleSheet(f"""
+            QLabel {{
+                color: {theme['status_text']};
+                font-size: 11px;
+                margin: 1px 0;
+                padding: 0;
+            }}
+        """)
+        layout.addWidget(token_label)
+
+        # Last used date with age color
+        last_used_str = session.updated_at.strftime('%m-%d-%Y')
+        if days_old == 0:
+            last_used_str = "Today"
+        elif days_old == 1:
+            last_used_str = "Yesterday"
+        elif days_old < 7:
+            last_used_str = f"{days_old} days ago"
+        else:
+            last_used_str = session.updated_at.strftime('%m-%d-%Y')
+
+        date_label = QLabel(last_used_str)
+        date_label.setStyleSheet(f"""
+            QLabel {{
+                color: {age_color};
+                font-size: 11px;
+                font-weight: 500;
+                margin: 1px 0;
+                padding: 0;
+            }}
+        """)
+        layout.addWidget(date_label)
+
+        # Create list item with proper size
+        item = QListWidgetItem()
+        item.setData(Qt.UserRole, session.session_id)
+
+        # Set proper size for the item
+        widget.setMinimumHeight(85)
+        widget.setMaximumHeight(95)
+        widget.adjustSize()
+        item.setSizeHint(widget.sizeHint())
+
+        # Add to list
+        self.sessions_list.addItem(item)
+        self.sessions_list.setItemWidget(item, widget)
 
     def on_session_double_click(self, item):
         """Handle double-click on session item."""
@@ -873,35 +1082,54 @@ class MainWindow(QMainWindow):
         self.update_session_info()
 
     def append_message_to_display(self, message: Message):
-        """Append a message to the chat display."""
+        """Append a message to the chat display with authentic iPhone SMS bubble styling."""
         cursor = self.chat_display.textCursor()
         cursor.movePosition(QTextCursor.End)
 
         # Get current theme colors
         theme = self.config_manager.get_theme()
+        is_dark_theme = self.config_manager.ui_config.theme == 'dark'
 
-        # Format message content
+        # Format message content - preserve line breaks and formatting
         content_html = message.content.replace('\n', '<br>')
 
-        # Format message with theme colors
+        # Add some spacing if this isn't the first message
+        if len(self.current_session.messages) > 1:
+            cursor.insertHtml('<div style="height: 8px;"></div>')
+
+        # Format message with authentic iPhone SMS bubbles
         if message.is_user_message():
-            # User message styling - slightly different background
-            user_bg = theme['input_bg'] if theme['input_bg'] != theme['chat_bg'] else theme['button_bg'] + '20'  # Add transparency
+            # User message - blue bubble on right (exactly like iPhone)
+            user_bg = '#007AFF' if not is_dark_theme else '#0A84FF'
+            user_shadow = '0 1px 2px rgba(0,122,255,0.2)' if not is_dark_theme else '0 1px 2px rgba(10,132,255,0.2)'
+            user_text = '#FFFFFF'
+            # iPhone-style bubble with authentic tail and shadow
             html_template = f"""
-                <div style="margin: 10px 0; padding: 10px; background-color: {user_bg}; border-left: 4px solid {theme['button_bg']}; color: {theme['chat_text']}; border-radius: 4px;">
-                    <b style="color: {theme['button_bg']};">You</b> <small style="color: {theme['status_text']};">({message.get_display_time()})</small><br>
-                    <span style="color: {theme['chat_text']};">{content_html}</span>
+                <div style="margin: 3px 0; text-align: right; clear: both; padding: 0 16px;">
+                    <div style="display: inline-block; position: relative; max-width: 65%; background: linear-gradient(135deg, {user_bg} 0%, {user_bg} 100%); color: {user_text}; padding: 10px 14px; border-radius: 20px; border-bottom-right-radius: 6px; box-shadow: {user_shadow}; font-size: 17px; line-height: 1.35; word-wrap: break-word; text-align: left; font-family: Arial, sans-serif;">
+                        {content_html}
+                    </div>
+                </div>
+                <div style="text-align: right; margin: 1px 20px 8px 0; font-size: 12px; color: {'#8E8E93' if not is_dark_theme else '#636366'}; opacity: 0.7;">
+                    {message.get_display_time()}
                 </div>
             """
             cursor.insertHtml(html_template)
         elif message.is_assistant_message():
-            # Assistant message styling - different accent color
-            assistant_color = '#28a745' if theme == self.config_manager.get_theme('light') else '#00d4aa'
-            assistant_bg = theme['panel_bg'] if theme['panel_bg'] != theme['chat_bg'] else assistant_color + '20'  # Add transparency
+            # Assistant message - gray bubble on left (exactly like iPhone)
+            assistant_bg = '#E5E5EA' if not is_dark_theme else '#2C2C2E'
+            assistant_text = '#000000' if not is_dark_theme else '#FFFFFF'
+            assistant_shadow = '0 1px 2px rgba(0,0,0,0.1)' if not is_dark_theme else '0 1px 2px rgba(255,255,255,0.05)'
+            # iPhone-style bubble with authentic tail and shadow
             html_template = f"""
-                <div style="margin: 10px 0; padding: 10px; background-color: {assistant_bg}; border-left: 4px solid {assistant_color}; color: {theme['chat_text']}; border-radius: 4px;">
-                    <b style="color: {assistant_color};">Assistant</b> <small style="color: {theme['status_text']};">({message.get_display_time()})</small><br>
-                    <span style="color: {theme['chat_text']};">{content_html}</span>
+                <div style="margin: 3px 0; text-align: left; clear: both; padding: 0 16px;">
+                    <div style="display: inline-block; position: relative; max-width: 65%; background-color: {assistant_bg}; color: {assistant_text}; padding: 10px 14px; border-radius: 20px; border-bottom-left-radius: 6px; box-shadow: {assistant_shadow}; font-size: 17px; line-height: 1.35; word-wrap: break-word; text-align: left; font-family: Arial, sans-serif;">
+                        <div style="font-size: 13px; opacity: 0.65; margin-bottom: 4px; font-weight: 600; color: {'#007AFF' if not is_dark_theme else '#0A84FF'};">Assistant</div>
+                        {content_html}
+                    </div>
+                </div>
+                <div style="text-align: left; margin: 1px 0 8px 20px; font-size: 12px; color: {'#8E8E93' if not is_dark_theme else '#636366'}; opacity: 0.7;">
+                    {message.get_display_time()}
                 </div>
             """
             cursor.insertHtml(html_template)
